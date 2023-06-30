@@ -1,3 +1,4 @@
+//token enum that represents the different types of tokens
 #[derive(Debug)]
 enum Token {
     Number(i32),
@@ -7,6 +8,7 @@ enum Token {
     Divide,
 }
 
+// basic lexer that takes a string and returns a vector of tokens
 fn lexer(input: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut iter = input.chars().peekable();
@@ -46,6 +48,7 @@ fn lexer(input: &str) -> Result<Vec<Token>, String> {
 
 }
 
+// basic parser that takes an iterator of chars and returns a number or an error
 fn parse_number(iter: &mut std::iter::Peekable<std::str::Chars>) -> Result<i32, String> {
     let mut number = String::new();
 
