@@ -1,7 +1,12 @@
 [package]
 name = "lime"
 version = "0.1.0"
+license = "GPL-3.0-only"
 edition = "2021"
+repository = "https://github.com/jackerschott/lime"
+readme = "README.md"
+categories = ["multimedia::images"]
+keywords = ["media","image","editor","scripting"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
