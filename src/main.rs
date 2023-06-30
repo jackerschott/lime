@@ -1,3 +1,6 @@
+use std::env;
+use std::fs;
+
 //token enum that represents the different types of tokens
 #[derive(Debug)]
 enum Token {
@@ -64,14 +67,30 @@ fn parse_number(iter: &mut std::iter::Peekable<std::str::Chars>) -> Result<i32, 
     number.parse::<i32>().map_err(|e| format!("Failed to parse number: {}", e))
 }
 
+// let's use a pest for parsing: http://pest.rs/
 fn test_lexer() {
     let input: &str = "2 + 3 * 4 - 5 / 2";
     let tokens: Vec<Token> = lexer(input).unwrap();
     println!("{:?}", tokens);
 }
 
+struct Options {
+    script_path : String
+}
+
+fn parse_args(args: std::env::Args) -> Options {
+    let args: Vec<String> = args.collect();
+    assert!(args.len() == 2);
+
+    return Options {
+        script_path: args[1].clone(),
+    };
+}
+
 fn main() {
     // 1. call program as `lime <script>`
+    let args = std::env::args();
+    let options = parse_args(args);
 
     // 2. load script as lines
 
