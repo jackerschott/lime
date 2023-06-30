@@ -64,8 +64,26 @@ fn parse_number(iter: &mut std::iter::Peekable<std::str::Chars>) -> Result<i32, 
     number.parse::<i32>().map_err(|e| format!("Failed to parse number: {}", e))
 }
 
-fn main() {
+fn test_lexer() {
     let input: &str = "2 + 3 * 4 - 5 / 2";
     let tokens: Vec<Token> = lexer(input).unwrap();
     println!("{:?}", tokens);
+}
+
+fn main() {
+    // 1. call program as `lime <script>`
+
+    // 2. load script as lines
+
+    // 3. parse whole script into some appropriate format (do this first completely,
+    //      because its cheap; processing an image is expensive)
+
+    // 4. execute parsing result
+    // 4.1 when a function is called, extract function name, arguments
+    //      and apply appropriate rust routine
+    // 4.2 when a variable is assigned, evaluate right hand side expression and
+    //      store result in some lookup table (definitely needed for layers as in
+    //      e.g. Photoshop)
+    // 4.3 ignore interactive calls for now
+    // 4.4 opening and closing images are simply handled as functions
 }
