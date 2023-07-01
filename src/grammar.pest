@@ -25,10 +25,10 @@ assign = {"="}
 argOpen = { "(" }
 argClose = { ")" }
 
-functionCall = { ident ~ argOpen }
+functionCall = { ident ~ argOpen ~ arguments ~ argClose}
 
-arguments = {ident*}
+arguments = {(!NEWLINE ~ !argClose ~ ANY)*}
 
-expression = { ident{1} ~ assign ~ functionCall ~ arguments ~ argClose}
+expression = { ident{1} ~ assign ~ functionCall }
 
-program = { ( ( expression | COMMENT ) ~( NEWLINE | EOI ) )* }
+program = { ( ( expression | COMMENT | functionCall) ~( NEWLINE+ | EOI ) )* }
