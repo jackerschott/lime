@@ -8,7 +8,7 @@ on:
       - 'LIICENSE'
       - '/images'
   
-    pull_request:
+  pull_request:
     branches: [ "dev_julian" ]
 
 env:
