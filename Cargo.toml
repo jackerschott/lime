@@ -11,3 +11,4 @@ keywords = ["media","image","editor","scripting"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+pest_derive = "2.7.0"

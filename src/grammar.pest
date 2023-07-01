@@ -1,0 +1,34 @@
+//  'Syntax examples'
+//  
+//  comments can start with '#' or '//' and single line only (for now!)
+//  
+//  base = create_layer()
+//  base = apply_brush(base, 'darkred', 0.5)
+//  base = gaussian_blur(base, 0.5, 0.5)
+
+// start of limes parsing grammar
+
+WHITESPACE = _{" " | "\t"}
+
+commentStart = { ( "#" | "/"{2} ) }
+
+COMMENT = { commentStart ~ (!NEWLINE ~ANY)*}
+
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+underscore = { "_" }
+
+ident = { !digit ~ (alpha | digit | underscore)+ }
+
+assign = {"="}
+
+argOpen = { "(" }
+argClose = { ")" }
+
+functionCall = { ident ~ argOpen }
+
+arguments = {ident*}
+
+expression = { ident{1} ~ assign ~ functionCall ~ arguments ~ argClose}
+
+program = { ( ( expression | COMMENT ) ~( NEWLINE | EOI ) )* }
