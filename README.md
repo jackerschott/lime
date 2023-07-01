@@ -1,4 +1,5 @@
-[![Build](https://github.com/jackerschott/lime/actions/workflows/rust.yml/badge.svg?branch=dev_julian)](https://github.com/jackerschott/lime/actions/workflows/rust.yml)
+[![Rust-Build-Test](https://github.com/jackerschott/lime/actions/workflows/rust-build.yml/badge.svg)](https://github.com/jackerschott/lime/actions/workflows/rust-build.yml)
+[![rust-clippy analyze](https://github.com/jackerschott/lime/actions/workflows/rust-clippy.yml/badge.svg)](https://github.com/jackerschott/lime/actions/workflows/rust-clippy.yml)
 
 # lime -- Leightweight Image Editor
 Non-destructive minimalistic image editor.
