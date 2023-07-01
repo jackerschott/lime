@@ -11,8 +11,14 @@
 WHITESPACE = _{" " | "\t"}
 
 commentStart = { ( "#" | "/"{2} ) }
+commentSingle = {commentStart ~ (!NEWLINE ~ANY)*}
 
-COMMENT = { commentStart ~ (!NEWLINE ~ANY)*}
+commentStartMulti = { "/*" }
+commentContentMulti = { (!commentEndMulti ~ ANY)* }
+commentEndMulti = { "*/" }
+commentMulti = { commentStartMulti ~ commentContentMulti ~ commentEndMulti }
+
+COMMENT = { commentSingle | commentMulti}
 
 alpha = { 'a'..'z' | 'A'..'Z' }
 digit = { '0'..'9' }
