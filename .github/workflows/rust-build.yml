@@ -3,7 +3,12 @@ name: Rust-Build-Test
 on:
   push:
     branches: [ "dev_julian" ]
-  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LIICENSE'
+      - '/images'
+  
+    pull_request:
     branches: [ "dev_julian" ]
 
 env:
