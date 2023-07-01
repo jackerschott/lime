@@ -4,12 +4,17 @@ extern crate pest;
 extern crate pest_derive;
 
 use pest::Parser;
-use std::{fs,env};
+use std::{fs,env, vec};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct ProgramParser;
 
+#[derive(Debug)]
+struct CmdArgument{
+    flag:String,
+    value:String
+}
 
 
 fn parse(input:String) {
@@ -40,26 +45,36 @@ fn direct_mode(input:String) {
     parse(input);
 }
 
-fn file_mode(input:&Vec<String>){
-    let file = fs::read_to_string(&input[2]).unwrap_or_else(|e| panic!("{}", e) );
+fn file_mode(input:String){
+    let file = fs::read_to_string(&input).unwrap_or_else(|e| panic!("{}", e) );
     println!("debug{:?}",file);
     parse(file);
 }
 
+fn arg_parser() {
+    let args: Vec<String> = env::args().collect();
+    let number_arguments: usize = args.len();
+    let mut counter: usize = 0;
+    let mut arguments:Vec<CmdArgument> = vec!();
+    for arg in &args {
+        if !(counter < number_arguments) {
+            break;
+        }
+        if arg.starts_with('-') {
+            arguments.push(CmdArgument { flag: arg.to_string(), value: args[counter+1].to_string() })
+        }
+        counter +=1;
+    }
+    println!("{:?}",arguments);
+}
+
+
+
 fn main() {
 
     // 1. call program as `lime <script>`
-    let args: Vec<String> = env::args().collect();
-    let arg_len = args.len();
-    match arg_len {
-        1 => println!("please specify input or get help using -h"),
-        2 => direct_mode(args[0].to_string()),
-        3 => file_mode(&args),
-        _ => println!("wtf is your problem ?"),
-    }
+    arg_parser();
 
-    //parse(example);
-    
     // 2. load script as lines
 
     // 3. parse whole script into some appropriate format (do this first completely,
