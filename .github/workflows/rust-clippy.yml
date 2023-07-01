@@ -10,16 +10,6 @@
 name: rust-clippy analyze
 
 on:
-  push:
-    branches: [ "main","dev","dev_julian" ]
-    paths-ignore:
-        - '**.md'
-        - 'LIICENSE'
-        - '/images'
-        
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "main","dev","dev_julian"  ]
   schedule:
     - cron: '43 11 * * 5'
 
