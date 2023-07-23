@@ -11,3 +11,11 @@ keywords = ["media","image","editor","scripting"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+[[bin]]
+name = "lime"
+path = "lime/main.rs"
+
+[[bin]]
+name = "editor"
+path = "editor/main.rs"
