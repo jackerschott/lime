@@ -1,1 +1,0 @@
-number = { (ASCII_DIGIT | "." | "-")+ }

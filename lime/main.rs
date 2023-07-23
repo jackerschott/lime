@@ -1,96 +1,75 @@
-use std::env;
-use std::fs;
+extern crate pest;
 
-//token enum that represents the different types of tokens
-#[derive(Debug)]
-enum Token {
-    Number(i32),
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
+#[macro_use]
+extern crate pest_derive;
+
+use pest::{Parser, iterators::Pair};
+use std::{fs,env, vec};
+
+#[derive(Parser)]
+#[grammar = "lime/grammar.pest"]
+struct ScriptParser;
+
+fn parse(script: &String) -> Vec<Pair<'_, Rule>> {
+    // TODO: handle parsing errors
+    let pairs = ScriptParser::parse(Rule::program, &script).unwrap();
+    return pairs.collect::<Vec<Pair<'_, Rule>>>();
 }
 
-// basic lexer that takes a string and returns a vector of tokens
-fn lexer(input: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
-    let mut iter = input.chars().peekable();
+#[derive(Debug, PartialEq)]
+enum CmdLineOption {
+    ScriptFile(String), Script(String), Help,
+}
 
-    while let Some(&c) = iter.peek() {
-        match c {
-            '0'..='9' => {
-                let number = parse_number(&mut iter)?;
-                tokens.push(Token::Number(number));
-            }
-            '+' => {
-                tokens.push(Token::Plus);
-                iter.next();
-            }
-            '-' => {
-                tokens.push(Token::Minus);
-                iter.next();
-            }
-            '*' => {
-                tokens.push(Token::Multiply);
-                iter.next();
-            }
-            '/' => {
-                tokens.push(Token::Divide);
-                iter.next();
-            }
-            ' ' => {
-                iter.next();
-            }
-            _ => {
-                return Err(format!("Invalid character: {}", c));
-            }
+fn parse_args() -> Vec<CmdLineOption> {
+    let args: Vec<String> = env::args().collect();
+    let mut options = vec!();
+    
+    for i in 0..args.len() {
+        if !args[i].starts_with('-') {
+            continue
+        }
+
+        match args[i].as_str(){
+            "-f" => options.push(CmdLineOption::ScriptFile(args[i+1].to_string())),
+            "-s" => options.push(CmdLineOption::Script(args[i+1].to_string())),
+            "-h" => options.push(CmdLineOption::Help),
+            _ => continue,
         }
     }
 
-    Ok(tokens)
-
-}
-
-// basic parser that takes an iterator of chars and returns a number or an error
-fn parse_number(iter: &mut std::iter::Peekable<std::str::Chars>) -> Result<i32, String> {
-    let mut number = String::new();
-
-    while let Some(&c) = iter.peek() {
-        if c.is_digit(10) {
-            number.push(c);
-            iter.next();
-        } else {
-            break;
-        }
-    }
-
-    number.parse::<i32>().map_err(|e| format!("Failed to parse number: {}", e))
-}
-
-// let's use a pest for parsing: http://pest.rs/
-fn test_lexer() {
-    let input: &str = "2 + 3 * 4 - 5 / 2";
-    let tokens: Vec<Token> = lexer(input).unwrap();
-    println!("{:?}", tokens);
-}
-
-struct Options {
-    script_path : String
-}
-
-fn parse_args(args: std::env::Args) -> Options {
-    let args: Vec<String> = args.collect();
-    assert!(args.len() == 2);
-
-    return Options {
-        script_path: args[1].clone(),
-    };
+    return options
 }
 
 fn main() {
     // 1. call program as `lime <script>`
-    let args = std::env::args();
-    let options = parse_args(args);
+    let options = parse_args();
+    if options.contains(&CmdLineOption::Help) {
+        println!(r#"lime - a simple image manipulation language
+            "    usage: lime [flag] <data>
+            "    -f <file>   parse script from file
+            "    -s <script> parse script from string
+            "    -h          print this help text"#);
+        return;
+    }
+
+    let mut script_content = String::new();
+    for option in options {
+        match option {
+            CmdLineOption::ScriptFile(script_path) => {
+                // TODO: handle read errors
+                script_content = fs::read_to_string(&script_path).unwrap();
+            }
+            CmdLineOption::Script(content) => script_content = content,
+            _ => continue
+        }
+    }
+
+    if script_content.is_empty() {
+        println!("[main] No script provided");
+    }
+
+    let matches = parse(&script_content);
 
     // 2. load script as lines
 

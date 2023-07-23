@@ -1,0 +1,40 @@
+//  'Syntax examples' can be tested at https://pest.rs
+//  
+//  comments can start with '#' or '//' and single line only (for now!)
+//  
+//  base = create_layer()
+//  base = apply_brush(base, 'darkred', 0.5)
+//  base = gaussian_blur(base, 0.5, 0.5)
+
+// start of limes parsing grammar
+
+WHITESPACE = _{" " | "\t"}
+
+commentStart = { ( "#" | "/"{2} ) }
+commentSingle = {commentStart ~ (!NEWLINE ~ANY)*}
+
+commentStartMulti = { "/*" }
+commentContentMulti = { (!commentEndMulti ~ ANY)* }
+commentEndMulti = { "*/" }
+commentMulti = { commentStartMulti ~ commentContentMulti ~ commentEndMulti }
+
+COMMENT = { commentSingle | commentMulti}
+
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+underscore = { "_" }
+
+ident = { !digit ~ (alpha | digit | underscore)+ }
+
+assign = {"="}
+
+argOpen = { "(" }
+argClose = { ")" }
+
+functionCall = { ident ~ argOpen ~ arguments ~ argClose}
+
+arguments = { (!NEWLINE ~ !argClose ~ ANY)* }
+
+expression = { ident{1} ~ assign ~ functionCall }
+
+program = { ((expression | COMMENT | functionCall) ~( NEWLINE+ | EOI))* }
