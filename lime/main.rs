@@ -4,7 +4,7 @@ extern crate pest;
 extern crate pest_derive;
 
 use pest::{Parser, iterators::Pair};
-use std::{fs,env, vec};
+use std::vec;
 
 #[derive(Parser)]
 #[grammar = "lime/grammar.pest"]
@@ -18,27 +18,26 @@ fn parse(script: &String) -> Vec<Pair<'_, Rule>> {
 
 #[derive(Debug, PartialEq)]
 enum CmdLineOption {
-    ScriptFile(String), Script(String), Help,
+    ScriptFile(String),
+    Script(String),
+    Help,
 }
 
 fn parse_args() -> Vec<CmdLineOption> {
-    let args: Vec<String> = env::args().collect();
+    let args : Vec<String> = std::env::args().collect();
+
     let mut options = vec!();
     
-    for i in 0..args.len() {
-        if !args[i].starts_with('-') {
-            continue
-        }
-
-        match args[i].as_str(){
-            "-f" => options.push(CmdLineOption::ScriptFile(args[i+1].to_string())),
-            "-s" => options.push(CmdLineOption::Script(args[i+1].to_string())),
+    for i in 1..args.len() {
+        match args[i].as_str() {
+            "-f" => options.push(CmdLineOption::ScriptFile(args[i+1].clone())),
+            "-s" => options.push(CmdLineOption::Script(args[i+1].clone())),
             "-h" => options.push(CmdLineOption::Help),
             _ => continue,
         }
     }
 
-    return options
+    return options;
 }
 
 fn main() {
@@ -58,18 +57,14 @@ fn main() {
         match option {
             CmdLineOption::ScriptFile(script_path) => {
                 // TODO: handle read errors
-                script_content = fs::read_to_string(&script_path).unwrap();
+                script_content = std::fs::read_to_string(&script_path).unwrap();
             }
             CmdLineOption::Script(content) => script_content = content,
             _ => continue
         }
     }
 
-    if script_content.is_empty() {
-        println!("[main] No script provided");
-    }
-
-    let matches = parse(&script_content);
+    let _matches = parse(&script_content);
 
     // 2. load script as lines
 
