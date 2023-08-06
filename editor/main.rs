@@ -27,39 +27,47 @@ fn main() -> Result<(), eframe::Error> {
 struct LimeEditor {
     _target : egui::ColorImage,
     target_view_content : egui::TextureHandle,
-    target_view_rect : Option<egui::Rect>,
+    target_view_rect : egui::Rect,
+    viewport_rect : egui::Rect,
 }
 
 impl LimeEditor {
     fn new(cc: &eframe::CreationContext, target : egui::ColorImage) -> Self {
         let target_view_content = cc.egui_ctx.load_texture("target",
                 target.clone(), Default::default()).clone();
-        LimeEditor { _target : target, target_view_content, target_view_rect: None }
+
+        let wininfo = &cc.integration_info.window_info;
+        let viewport_rect = egui::Rect::from_points(
+                &[egui::Pos2::ZERO, wininfo.size.to_pos2()]);
+        let target_view_rect = LimeEditor::get_initial_target_view_rect(
+                target_view_content.aspect_ratio(), viewport_rect.size());
+
+        LimeEditor {
+            _target : target,
+            target_view_content,
+            target_view_rect,
+            viewport_rect,
+        }
     }
 }
 
 impl eframe::App for LimeEditor {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // the window has its initial default size on the first frame (which can be
-        // eg. manually entered) and it has only responded to external resize
-        // requests (by eg. the window manager) on the second frame;
-        // since we need frame.info().window_info.size below, skip the first frame
-        // TODO: this is some obvious bullshit, find a better solution here
-        if ctx.frame_nr() == 0 {
-            return
-        }
-
-        let target_view_rect = self.target_view_rect.get_or_insert_with(|| {
-            LimeEditor::get_initial_target_view_rect(
+        // center target view when window size changed
+        let wininfo = frame.info().window_info;
+        if self.viewport_rect.size() != wininfo.size {
+            self.target_view_rect = LimeEditor::get_initial_target_view_rect(
                     self.target_view_content.aspect_ratio(),
-                    frame.info().window_info.size)
-        });
+                    frame.info().window_info.size);
+            self.viewport_rect = egui::Rect::from_points(
+                &[egui::Pos2::ZERO, wininfo.size.to_pos2()]);
+        }
 
         let target_window = egui::Window::new("")
             .title_bar(false) // no traditional window with title bar
             .frame(egui::Frame::none()) // and frame
-            .fixed_pos(target_view_rect.min)
-            .fixed_size(target_view_rect.size());
+            .fixed_pos(self.target_view_rect.min)
+            .fixed_size(self.target_view_rect.size());
 
         target_window.show(ctx, |ui| self.add_target_window_contents(ui));
 
@@ -85,10 +93,8 @@ impl LimeEditor {
     }
 
     fn add_target_window_contents(&mut self, ui : &mut egui::Ui) {
-        let target_view_rect = self.target_view_rect.expect(
-                "is set early every update call");
         let target_view = egui::Image::new(&self.target_view_content,
-                target_view_rect.size());
+                self.target_view_rect.size());
         let target_view_resp = ui.add(target_view.sense(
                     egui::Sense::click_and_drag()));
         self.handle_target_view_response(target_view_resp);
@@ -109,17 +115,15 @@ impl LimeEditor {
         //      also note that GIMP zoom levels are not linear, but pretty arbitrary
         //      looking values
         if state.modifiers.ctrl && state.zoom_delta() > 1.0 {
-            self.target_view_rect = self.target_view_rect.map(|rect| {
-                // expand target view by 10%
-                let expand_amount = (state.zoom_delta() - 1.0) * rect.size();
-                rect.expand2(expand_amount)
-            });
+            // expand target view by 10%
+            let expand_amount = (state.zoom_delta() - 1.0)
+                * self.target_view_rect.size();
+            self.target_view_rect = self.target_view_rect.expand2(expand_amount);
         } else if state.modifiers.ctrl && state.zoom_delta() < 1.0 {
-            self.target_view_rect = self.target_view_rect.map(|rect| {
-                // shrink target view by 10%
-                let shrink_amount = (1.0 - state.zoom_delta()) * rect.size();
-                rect.shrink2(shrink_amount)
-            });
+            // shrink target view by 10%
+            let shrink_amount = (1.0 - state.zoom_delta())
+                * self.target_view_rect.size();
+            self.target_view_rect = self.target_view_rect.shrink2(shrink_amount);
         }
     }
 
@@ -135,7 +139,6 @@ impl LimeEditor {
     }
 
     fn translate_target_view(&mut self, delta : egui::Vec2) {
-        self.target_view_rect = self.target_view_rect.map(
-                |rect| rect.translate(delta));
+        self.target_view_rect = self.target_view_rect.translate(delta);
     }
 }
