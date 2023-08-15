@@ -1,18 +1,7 @@
-#   this is an example lime comment
-//  this is another example comment
+lime = open_layer('images/lime.jpg');
 
-/* everything inside a multiline comment should be ignored
-base = create_layer()
-base = apply_brush(base, 'darkred', 0.5)
-base = gaussian_blur(base, 0.5, 0.5)
-*/
+lime_blurred = gaussian_blur(lime_with_brush, 0.5, 0.5);
 
-base = create_layer()
-base = apply_brush(base, 'darkred', 0.5)
-base = gaussian_blur(base, 0.5, 0.5)
+lime_with_brush = apply_brush(&lime_blurred);
 
-base = open('images/lime.jpg')
-base = gaussian_blur(base, 0.5, 0.5)
-save(base, 'images/output.jpg')
-
-render(base)
+save_layer('images/lime_edited.jpg')
