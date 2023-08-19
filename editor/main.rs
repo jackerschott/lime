@@ -1,6 +1,6 @@
 use eframe::egui;
 use image;
-use image::{DynamicImage, GenericImageView, Pixel};
+use image::{RgbaImage, GenericImageView, Rgba};
 use egui::{Context, Ui, Image, TextureHandle, Response, Color32, Pos2, Vec2, Rect};
 
 mod brush;
@@ -18,6 +18,7 @@ mod brush;
 fn main() -> Result<(), eframe::Error> {
     const IMG_PATH : &str = "images/lime.jpg";
     let edit_target = image::open(IMG_PATH).expect("images/lime.jpg is always there");
+    let edit_target = edit_target.to_rgba8();
 
     return eframe::run_native("Lime Editor", eframe::NativeOptions::default(),
             Box::new(|cc| {
@@ -29,17 +30,23 @@ fn main() -> Result<(), eframe::Error> {
 
 const TEXTURE_OPTIONS : egui::TextureOptions = egui::TextureOptions::NEAREST;
 struct LimeEditor {
-    secret_canvas : DynamicImage,
+    secret_canvas : RgbaImage,
     canvas : TextureHandle,
     canvas_rect : Rect,
     viewport_rect : Rect,
-    brush : brush::Brush,
+
+    brush_manager : brush::BrushManager,
     patches : Vec<brush::Patch>,
 }
 
 impl LimeEditor {
-    fn new(cc: &eframe::CreationContext, target : DynamicImage) -> Self {
-        let canvas_content = LimeEditor::get_texture_content(&target);
+    // In principle one could use DynamicImage here for target to support a lot of
+    // ways to represent color channels (i.e. Rgb, Rgba, Grayscale) and color channel
+    // types (i.e. u8, u16, f32), which is something that e.g. GIMP supports; however
+    // no need to be general here since egui does only support Rgba and u8 anyway
+    // with its ColorImage
+    fn new(cc: &eframe::CreationContext, target : RgbaImage) -> Self {
+        let canvas_content = img_to_egui(&target);
         let canvas = cc.egui_ctx.load_texture("target",
                 canvas_content, TEXTURE_OPTIONS);
 
@@ -48,15 +55,16 @@ impl LimeEditor {
                 &[Pos2::ZERO, wininfo.size.to_pos2()]);
         let canvas_rect = LimeEditor::get_initial_target_view_rect(
                 canvas.aspect_ratio(), viewport_rect.size());
-        let brush = brush::Brush::new(100, 20);
+        let brush = brush::Brush::new(100, 100, image::Rgb([0, 255, 0]));
+        let brush_manager = brush::BrushManager::new(brush, 100);
 
         LimeEditor {
             secret_canvas: target,
             canvas,
             canvas_rect,
             viewport_rect,
-            brush,
-            patches: vec!(),
+            brush_manager,
+            patches: Vec::new(),
         }
     }
 }
@@ -95,7 +103,7 @@ impl eframe::App for LimeEditor {
 
 impl LimeEditor {
     fn update_canvas(canvas : &mut TextureHandle,
-            secret_canvas : &DynamicImage, patches : &Vec<brush::Patch>) {
+            secret_canvas : &RgbaImage, patches : &Vec<brush::Patch>) {
         for patch in patches {
             let canvas_at_patch = secret_canvas.view(patch.x,
                     patch.y, patch.width, patch.height);
@@ -103,28 +111,12 @@ impl LimeEditor {
             // following (see SubImage documentation)
             let canvas_at_patch = *canvas_at_patch;
 
-            let new_content = LimeEditor::get_texture_content(&canvas_at_patch);
+            let new_content = img_to_egui(&canvas_at_patch);
             canvas.set_partial([patch.x as usize, patch.y as usize],
                     new_content, TEXTURE_OPTIONS);
         }
     }
 
-    fn get_texture_content<I : GenericImageView>(img: &I) -> egui::ColorImage
-    where
-        I : GenericImageView,
-        I::Pixel : Pixel<Subpixel = u8>
-    {
-        let content_size = [img.width(), img.height()].map(|x| x as usize);
-        let mut content = egui::ColorImage::new(content_size, Color32::BLACK);
-
-        for (x, y, pixel) in img.pixels() {
-            let image::Rgba(rgba,) = pixel.to_rgba();
-            content.pixels[(y * img.width() + x) as usize] =
-                Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]);
-        }
-
-        return content;
-    }
 
     fn get_initial_target_view_rect(content_aspect_ratio : f32,
             window_size : Vec2) -> Rect {
@@ -170,15 +162,17 @@ impl LimeEditor {
             self.canvas_rect = self.canvas_rect.shrink2(shrink_amount);
         }
 
-        if state.pointer.button_pressed(egui::PointerButton::Primary) {
-            let pos = state.pointer.interact_pos().unwrap();
+        if state.pointer.button_pressed(egui::PointerButton::Primary)
+                || state.pointer.is_decidedly_dragging() {
+            let pos = state.pointer.interact_pos()
+                .expect("interaction is checked above");
             if self.canvas_rect.contains(pos) {
-                self.apply_brush(pos);
+                self.handle_brush(pos);
             }
         }
     }
 
-    fn apply_brush(&mut self, pos_on_window: Pos2) {
+    fn handle_brush(&mut self, pos_on_window: Pos2) {
         if !self.canvas_rect.contains(pos_on_window) {
             return
         }
@@ -186,18 +180,13 @@ impl LimeEditor {
         let pos_on_window = (pos_on_window - self.canvas_rect.min)
             / (self.canvas_rect.max - self.canvas_rect.min);
 
-        let pos_on_canvas = pos_on_window * self.canvas.size_vec2();
-        let pos_on_canvas = [pos_on_canvas.x as u32, pos_on_canvas.y as u32];
+        let pos_on_canvas = (pos_on_window * self.canvas.size_vec2()).to_pos2();
 
-        let patch;
-        match &mut self.secret_canvas {
-            DynamicImage::ImageRgb8(x) => {
-                patch = self.brush.apply(x, pos_on_canvas);
-            },
-            _ => panic!(),
+        if self.brush_manager.probe_brush_application(pos_on_canvas) {
+            let patch = self.brush_manager.apply_brush(
+                    &mut self.secret_canvas, pos_on_canvas);
+            self.patches.push(patch);
         }
-
-        self.patches.push(patch);
     }
 
     fn add_viewport_contents(&mut self, _ui : &mut Ui) {
@@ -214,4 +203,19 @@ impl LimeEditor {
     fn translate_target_view(&mut self, delta : Vec2) {
         self.canvas_rect = self.canvas_rect.translate(delta);
     }
+}
+
+fn img_to_egui<I>(img: &I) -> egui::ColorImage
+where
+    I : GenericImageView<Pixel = Rgba<u8>> // also support (derefed) SubImages
+{
+    let content_size = [img.width(), img.height()].map(|x| x as usize);
+    let mut content = egui::ColorImage::new(content_size, Color32::BLACK);
+    // pattern matching is awesome
+    for (x, y, image::Rgba(rgba)) in img.pixels() {
+        content.pixels[(y * img.width() + x) as usize] =
+            Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]);
+    }
+
+    return content;
 }
