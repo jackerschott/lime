@@ -9,9 +9,9 @@ pub struct Manager {
 
 impl Manager {
     pub fn new() -> Self {
-        let brush = Brush::new(100, 100, image::Rgb([0, 255, 0]));
+        let brush = Brush::new(100, 50, image::Rgb([0, 255, 0]));
         Self { brush, brush_state: BrushState::NonTouching,
-            stroke_splotch_spacing: 200 }
+            stroke_splotch_spacing: 20 }
     }
 
     pub fn apply_input(&mut self, input: &InputState,

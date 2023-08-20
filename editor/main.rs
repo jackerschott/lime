@@ -37,6 +37,8 @@ struct LimeEditor {
 
     brush_manager : brush::Manager,
     patches : Vec<brush::Patch>,
+
+    zoom_level : u8,
 }
 
 impl LimeEditor {
@@ -53,8 +55,10 @@ impl LimeEditor {
         let wininfo = &cc.integration_info.window_info;
         let viewport_rect = Rect::from_points(
                 &[Pos2::ZERO, wininfo.size.to_pos2()]);
-        let canvas_rect = LimeEditor::get_initial_target_view_rect(
-                canvas.aspect_ratio(), viewport_rect.size());
+        let canvas_size = LimeEditor::get_unscaled_canvas_size(
+                viewport_rect.size(), canvas.aspect_ratio());
+        let canvas_rect = Rect::from_center_size(
+                (0.5 * viewport_rect.size()).to_pos2(), canvas_size);
 
         LimeEditor {
             secret_canvas: target,
@@ -63,6 +67,7 @@ impl LimeEditor {
             viewport_rect,
             brush_manager: brush::Manager::new(),
             patches: Vec::new(),
+            zoom_level: LimeEditor::ZOOM_FACTORS.len() as u8 / 2 + 1,
         }
     }
 }
@@ -146,24 +151,63 @@ impl LimeEditor {
         }
     }
 
+    const ZOOM_FACTORS : [f32; 33] = [256.0, 180.0, 128.0, 90.0, 64.0, 45.0, 32.0,
+        23.0, 16.0, 11.0, 8.0, 5.5, 4.0, 3.0, 2.0, 1.5, 1.0, 0.667, 0.5, 0.333, 0.25,
+        0.182, 0.125, 0.0909, 0.0625, 0.0435, 0.0312, 0.0222, 0.0156, 0.0111,
+        0.00781, 0.00556, 0.00391];
+
     fn handle_input(&mut self, state: &egui::InputState) {
         // TODO: should we use hardcoded zoom levels as in GIMP?
         //      also note that GIMP zoom levels are not linear, but pretty arbitrary
         //      looking values
-        if state.modifiers.ctrl && state.zoom_delta() > 1.0 {
-            let expand_amount = (state.zoom_delta() - 1.0)
-                * self.canvas_rect.size();
-            self.canvas_rect = self.canvas_rect.expand2(expand_amount);
-        } else if state.modifiers.ctrl && state.zoom_delta() < 1.0 {
-            let shrink_amount = (1.0 - state.zoom_delta())
-                * self.canvas_rect.size();
-            self.canvas_rect = self.canvas_rect.shrink2(shrink_amount);
+        //if state.modifiers.ctrl && state.zoom_delta() > 1.0 {
+        //    let expand_amount = (state.zoom_delta() - 1.0)
+        //        * self.canvas_rect.size();
+        //    self.canvas_rect = self.canvas_rect.expand2(expand_amount);
+        //} else if state.modifiers.ctrl && state.zoom_delta() < 1.0 {
+        //    let shrink_amount = (1.0 - state.zoom_delta())
+        //        * self.canvas_rect.size();
+        //    self.canvas_rect = self.canvas_rect.shrink2(shrink_amount);
+        //}
+
+        if state.pointer.hover_pos().is_some() && state.modifiers.ctrl
+                && state.zoom_delta() != 1.0 {
+            let pointer_pos = state.pointer.hover_pos()
+                .expect("is_some checked above");
+            self.apply_zoom(state.zoom_delta(), pointer_pos);
         }
 
         if let Some(patch) = self.brush_manager.apply_input(state,
                 self.canvas_rect, &mut self.secret_canvas) {
             self.patches.push(patch);
         }
+    }
+
+    fn apply_zoom(&mut self, zoom_delta : f32, pointer_pos : Pos2) {
+        self.zoom_level = if zoom_delta > 1.0 {
+            self.zoom_level.saturating_sub(1)
+        } else {
+            self.zoom_level.saturating_add(1)
+        };
+
+        let unscaled_size = LimeEditor::get_unscaled_canvas_size(
+            self.viewport_rect.size(), self.canvas_rect.aspect_ratio());
+
+        let zoom_fac = LimeEditor::ZOOM_FACTORS[self.zoom_level as usize];
+        let rel_zoom_fac = zoom_fac * unscaled_size.x / self.canvas_rect.width();
+        self.canvas_rect = Rect::from_center_size(
+            pointer_pos + (self.canvas_rect.center() - pointer_pos) * rel_zoom_fac,
+            self.canvas_rect.size() * rel_zoom_fac);
+    }
+
+    fn get_unscaled_canvas_size(bound_size : Vec2, aspect_ratio : f32) -> Vec2 {
+        let mut size = bound_size;
+        if aspect_ratio > 1.0 {
+            size.y = size.x / aspect_ratio;
+        } else {
+            size.x = size.y * aspect_ratio;
+        }
+        return size;
     }
 
     fn add_viewport_contents(&mut self, _ui : &mut Ui) {
