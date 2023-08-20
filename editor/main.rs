@@ -35,7 +35,7 @@ struct LimeEditor {
     canvas_rect : Rect,
     viewport_rect : Rect,
 
-    brush_manager : brush::BrushManager,
+    brush_manager : brush::Manager,
     patches : Vec<brush::Patch>,
 }
 
@@ -55,15 +55,13 @@ impl LimeEditor {
                 &[Pos2::ZERO, wininfo.size.to_pos2()]);
         let canvas_rect = LimeEditor::get_initial_target_view_rect(
                 canvas.aspect_ratio(), viewport_rect.size());
-        let brush = brush::Brush::new(100, 100, image::Rgb([0, 255, 0]));
-        let brush_manager = brush::BrushManager::new(brush, 100);
 
         LimeEditor {
             secret_canvas: target,
             canvas,
             canvas_rect,
             viewport_rect,
-            brush_manager,
+            brush_manager: brush::Manager::new(),
             patches: Vec::new(),
         }
     }
@@ -105,8 +103,8 @@ impl LimeEditor {
     fn update_canvas(canvas : &mut TextureHandle,
             secret_canvas : &RgbaImage, patches : &Vec<brush::Patch>) {
         for patch in patches {
-            let canvas_at_patch = secret_canvas.view(patch.x,
-                    patch.y, patch.width, patch.height);
+            let canvas_at_patch = secret_canvas.view(patch.x as u32,
+                    patch.y as u32, patch.width, patch.height);
             // only dereferenced SubImage is a GenericImage which we need in the
             // following (see SubImage documentation)
             let canvas_at_patch = *canvas_at_patch;
@@ -162,29 +160,8 @@ impl LimeEditor {
             self.canvas_rect = self.canvas_rect.shrink2(shrink_amount);
         }
 
-        if state.pointer.button_pressed(egui::PointerButton::Primary)
-                || state.pointer.is_decidedly_dragging() {
-            let pos = state.pointer.interact_pos()
-                .expect("interaction is checked above");
-            if self.canvas_rect.contains(pos) {
-                self.handle_brush(pos);
-            }
-        }
-    }
-
-    fn handle_brush(&mut self, pos_on_window: Pos2) {
-        if !self.canvas_rect.contains(pos_on_window) {
-            return
-        }
-
-        let pos_on_window = (pos_on_window - self.canvas_rect.min)
-            / (self.canvas_rect.max - self.canvas_rect.min);
-
-        let pos_on_canvas = (pos_on_window * self.canvas.size_vec2()).to_pos2();
-
-        if self.brush_manager.probe_brush_application(pos_on_canvas) {
-            let patch = self.brush_manager.apply_brush(
-                    &mut self.secret_canvas, pos_on_canvas);
+        if let Some(patch) = self.brush_manager.apply_input(state,
+                self.canvas_rect, &mut self.secret_canvas) {
             self.patches.push(patch);
         }
     }

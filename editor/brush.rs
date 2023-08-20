@@ -1,59 +1,103 @@
 use image::{RgbaImage, Rgb};
-use egui::Pos2;
+use egui::{InputState, Rect, PointerButton, Pos2, vec2};
 
-#[derive(Debug)]
-pub struct Patch {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-pub struct BrushManager {
+pub struct Manager {
     brush: Brush,
-    spacing: u32,
-    dragged_distance: f32,
-    last_probe_position: Option<egui::Pos2>,
-    positive_last_check: bool,
+    brush_state: BrushState,
+    stroke_splotch_spacing: u32,
 }
 
-impl BrushManager {
-    pub fn new(brush: Brush, spacing: u32) -> Self {
-        Self { brush, spacing, dragged_distance: 0.0,
-            last_probe_position: None, positive_last_check: false }
+impl Manager {
+    pub fn new() -> Self {
+        let brush = Brush::new(100, 100, image::Rgb([0, 255, 0]));
+        Self { brush, brush_state: BrushState::NonTouching,
+            stroke_splotch_spacing: 200 }
     }
 
-    //fn check_brush_application(&self, pos: Pos2) -> bool {
-    //    let Some(lastpos) = self.last_probe_position else { return true };
-    //    let distance = self.dragged_distance + (pos - lastpos).length();
+    pub fn apply_input(&mut self, input: &InputState,
+            canvas_rect : Rect, target: &mut RgbaImage) -> Option<Patch> {
+        let min_splotch_distance = self.brush.radius as f32
+            * self.stroke_splotch_spacing as f32 / 100.0;
+        self.brush_state = Manager::update_brush_state(self.brush_state, input,
+                min_splotch_distance, canvas_rect, target.dimensions());
 
-    //    let needed_distance = self.brush.radius as f32 * self.spacing as f32 / 100.0;
-    //    return distance >= needed_distance;
-    //}
-
-    pub fn probe_brush_application(&mut self, pos: Pos2) -> bool {
-        let Some(lastpos) = self.last_probe_position else {
-            self.last_probe_position = Some(pos);
-            self.dragged_distance = 0.0;
-
-            self.positive_last_check = true;
-            return self.positive_last_check;
-        };
-
-        self.dragged_distance += (pos - lastpos).length();
-        let needed_distance = self.brush.radius as f32 * self.spacing as f32 / 100.0;
-
-        self.positive_last_check = self.dragged_distance >= needed_distance;
-        return self.positive_last_check;
+        match self.brush_state {
+            BrushState::Stroking { pos, splotch_ready: true, .. }
+                => self.brush.apply(target, (pos.x as i64, pos.y as i64)),
+            BrushState::Dabbing { pos }
+                => self.brush.apply(target, (pos.x as i64, pos.y as i64)),
+            BrushState::Stroking { splotch_ready: false, .. } => None,
+            BrushState::NonTouching => None,
+        }
     }
 
+    fn update_brush_state(state: BrushState, input: &InputState,
+            min_splotch_distance: f32, canvas_rect : Rect,
+            target_dims : (u32, u32)) -> BrushState {
+        let dabbing = input.pointer.button_clicked(PointerButton::Primary);
+        let stroking = input.pointer.button_down(PointerButton::Primary)
+            && input.pointer.is_decidedly_dragging();
 
-    pub fn apply_brush(&self, target: &mut RgbaImage, pos: Pos2) -> Patch {
-        assert!(self.positive_last_check);
+        if !dabbing && !stroking {
+            return BrushState::NonTouching;
+        }
 
-        self.brush.apply(target, (pos.x as u32, pos.y as u32))
+        let pos_on_viewport = input.pointer.interact_pos()
+            .expect("we are either dabbing or stroking");
+        let pos_on_target = Manager::pos_on_target(
+                pos_on_viewport, canvas_rect, target_dims);
+
+        if dabbing {
+            return BrushState::Dabbing { pos: pos_on_target };
+        }
+
+        match state {
+            BrushState::Stroking { pos: last_pos, stroked_distance, .. } => {
+                let stroked_distance = stroked_distance
+                    + (pos_on_target - last_pos).length();
+                if stroked_distance > min_splotch_distance {
+                    return BrushState::Stroking {
+                        pos: pos_on_target,
+                        stroked_distance: 0.0,
+                        splotch_ready: true,
+                    };
+                } else {
+                    return BrushState::Stroking {
+                        pos: pos_on_target,
+                        stroked_distance,
+                        splotch_ready: false,
+                    };
+                }
+            },
+            _ => BrushState::Stroking {
+                pos: pos_on_target,
+                stroked_distance: 0.0,
+                splotch_ready: true,
+            }
+        }
     }
 
+    fn pos_on_target(pos_on_window: Pos2, canvas_rect: Rect,
+            target_dims : (u32, u32)) -> Pos2 {
+        let pos_on_window = (pos_on_window - canvas_rect.min)
+            / (canvas_rect.max - canvas_rect.min);
+
+        let target_dims = vec2(target_dims.0 as f32, target_dims.1 as f32);
+        (pos_on_window * target_dims).to_pos2()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum BrushState {
+    Stroking {
+        pos: Pos2,
+        stroked_distance: f32,
+        splotch_ready: bool,
+    },
+    Dabbing {
+        pos: Pos2,
+    },
+    NonTouching,
 }
 
 pub struct Brush {
@@ -75,17 +119,33 @@ impl Brush {
     //    self.spacing = spacing;
     //}
 
-    fn apply(&self, target : &mut RgbaImage, pos : (u32, u32)) -> Patch {
+    fn apply(&self, target : &mut RgbaImage, pos : (i64, i64)) -> Option<Patch> {
         let brush_blob = Brush::build_brush_blob(
                 self.radius, self.hardness, self.color);
 
-        let x_blob = pos.0 - brush_blob.width() / 2;
-        let y_blob = pos.1 - brush_blob.height() / 2;
-        image::imageops::overlay(target, &brush_blob, x_blob as i64, y_blob as i64);
+        let x_blob = pos.0 - brush_blob.width() as i64 / 2;
+        let y_blob = pos.1 - brush_blob.height() as i64 / 2;
+        image::imageops::overlay(target, &brush_blob, x_blob, y_blob);
 
-        Patch { x : x_blob, y : y_blob,
-            width : brush_blob.width(),
-            height : brush_blob.height() }
+        Brush::get_patch_from_blob_bounds((x_blob, y_blob),
+            brush_blob.dimensions(), target.dimensions())
+    }
+
+    fn get_patch_from_blob_bounds((x, y) : (i64, i64), (width, height) : (u32, u32),
+            (target_width, target_height) : (u32, u32)) -> Option<Patch> {
+        if (x + width as i64) < 0 || (y + height as i64) < 0 {
+            return None
+        }
+        let x = x.max(0) as u32;
+        let y = y.max(0) as u32;
+
+        if x > target_width || y > target_height {
+            return None
+        }
+        let width = width.min(target_width - x);
+        let height = height.min(target_height - y);
+
+        return Some(Patch { x, y, width, height });
     }
 
     fn build_brush_blob(radius : u32, hardness : u32,
@@ -139,9 +199,9 @@ impl Brush {
 
 // compute rational quadratic like this
 //
-//    ^     
+//    ^
 //    |     slope0
-// y1 | - - _____    
+// y1 | - - _____
 //    |          \____
 //    |     |         \_
 //    |                 \
@@ -169,4 +229,12 @@ fn get_rational_quadratic((x1, x2) : (f32, f32), slope1 : f32,
         y1 + (y2 - y1) * (s * xi * xi + slope1 * xi * (1.0 - xi))
             / (s + (slope1 + slope2 - 2.0 * s) * xi * (1.0 - xi))
     }
+}
+
+#[derive(Debug)]
+pub struct Patch {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
 }
